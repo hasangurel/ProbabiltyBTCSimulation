@@ -1,65 +1,80 @@
-import yfinance as yf
-import pandas as pd
 import numpy as np
+import random
+import tkinter as tk
+from tkinter import ttk
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-# Hisse senedi simgesi ve veri çekme tarih aralığı
-ticker = "BTC-USD"
-start_date = "2014-01-01"
-end_date = "2024-06-21"
+# Parametreler
+total_declines = 12
+total_increases = 15
+total_flats = 13
+average_decline = -26.37 / 100  # Yüzdeyi oran olarak çevirmek
+average_increase = 88.79 / 100  # Yüzdeyi oran olarak çevirmek
+average_flat_change = -0.91 / 100  # Yüzdeyi oran olarak çevirmek
 
-# Yahoo Finance üzerinden verileri çekme
-stock_data = yf.download(ticker, start=start_date, end=end_date)
+# Olasılıkları hesapla
+total_events = total_declines + total_increases + total_flats
+prob_decline = total_declines / total_events
+prob_increase = total_increases / total_events
+prob_flat = total_flats / total_events
 
-# Veri setinde çeyrekleri belirlemek için tarih sınırlarını hesaplayalım
-def get_quarter(date):
-    quarter = (date.month - 1) // 3 + 1
-    return f"Q{quarter}"
+# Simülasyon işlevi
+def run_simulation():
+    num_simulation_events = int(num_events_entry.get())
+    initial_value = 100
+    value = initial_value
+    values = [value]
+    events = []
 
-# Veri setine çeyrek sütunu ekleyelim
-stock_data['Quarter'] = stock_data.index.to_series().apply(get_quarter)
-stock_data['Year'] = stock_data.index.year
+    for _ in range(num_simulation_events):
+        event = random.choices(['decline', 'increase', 'flat'], weights=[prob_decline, prob_increase, prob_flat], k=1)[0]
+        if event == 'decline':
+            value *= (1 + average_decline)
+        elif event == 'increase':
+            value *= (1 + average_increase)
+        elif event == 'flat':
+            value *= (1 + average_flat_change)
+        values.append(value)
+        events.append(event)
 
-# Yıl ve çeyrek bazında yükselme/düşüşü kontrol eden fonksiyon
-def classify_trend(start_price, end_price):
-    change_percentage = ((end_price - start_price) / start_price) * 100
-    if change_percentage >= 10:
-        return "Yükseliş", change_percentage
-    elif change_percentage <= -10:
-        return "Düşüş", change_percentage
-    else:
-        return "Yatay", change_percentage
+    result_label.config(text=f"Başlangıç Değeri: {initial_value}\nSimülasyon Sonrası Değer: {value:.2f}")
 
-# Çeyrek bazında trendleri belirleme
-results = []
-for (year, quarter), quarter_data in stock_data.groupby(['Year', 'Quarter']):
-    if len(quarter_data) > 0:
-        start_price = quarter_data.iloc[0]['Close']
-        end_price = quarter_data.iloc[-1]['Close']
-        trend, change_percentage = classify_trend(start_price, end_price)
-        results.append({'Year': year, 'Quarter': quarter, 'Trend': trend, 'Change_Percentage': change_percentage})
+    # Grafiği güncelle
+    ax.clear()
+    ax.plot(values, marker='o')
+    for i, event in enumerate(events):
+        ax.annotate(event, (i+1, values[i+1]), textcoords="offset points", xytext=(0,10), ha='center')
+    ax.set_title('Simülasyon Sonuçları')
+    ax.set_xlabel('Olay Sayısı')
+    ax.set_ylabel('Değer')
+    canvas.draw()
 
-# Sonuçları DataFrame'e çevirme
-results_df = pd.DataFrame(results)
+# UI oluşturma
+root = tk.Tk()
+root.title("Simülasyon")
+root.geometry("1024x768")
 
-# Yükseliş ve düşüşlerin ortalama yüzde değişimini hesaplama
-avg_increase = results_df[results_df['Trend'] == 'Yükseliş']['Change_Percentage'].mean()
-avg_decrease = results_df[results_df['Trend'] == 'Düşüş']['Change_Percentage'].mean()
+mainframe = ttk.Frame(root, padding="10 10 10 10")
+mainframe.grid(column=0, row=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
-# Sonuçları yazdırma
-print(f"Yükselişlerin ortalama yüzde artışı: {avg_increase:.2f}%")
-print(f"Düşüşlerin ortalama yüzde düşüşü: {avg_decrease:.2f}%")
+ttk.Label(mainframe, text="Olay Sayısı:").grid(column=1, row=1, sticky=tk.W)
+num_events_entry = ttk.Entry(mainframe, width=7)
+num_events_entry.grid(column=2, row=1, sticky=(tk.W, tk.E))
+num_events_entry.insert(0, "8")
 
-# Her bir trend türünün sayısını ve yüzdesini hesaplama
-trend_counts = results_df['Trend'].value_counts()
-trend_percentages = (trend_counts / len(results_df)) * 100
+ttk.Button(mainframe, text="Simülasyonu Çalıştır", command=run_simulation).grid(column=3, row=1, sticky=tk.W)
 
-print("\nTrend dağılımı:")
-for trend, count in trend_counts.items():
-    percentage = trend_percentages[trend]
-    print(f"{trend}: {count} kez ({percentage:.2f}%)")
+result_label = ttk.Label(mainframe, text="")
+result_label.grid(column=1, row=2, columnspan=3, sticky=tk.W)
 
-# Sonuçları CSV dosyasına kaydetme
-results_csv_path = 'BTCson.csv'
-results_df.to_csv(results_csv_path, index=False)
+fig, ax = plt.subplots(figsize=(10, 6))
+canvas = FigureCanvasTkAgg(fig, master=mainframe)
+canvas.get_tk_widget().grid(column=1, row=3, columnspan=3)
 
-print(f"\nCSV dosyası oluşturuldu: {results_csv_path}")
+for child in mainframe.winfo_children():
+    child.grid_configure(padx=5, pady=5)
+
+num_events_entry.focus()
+
+root.mainloop()
