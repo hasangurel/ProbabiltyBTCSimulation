@@ -1,89 +1,99 @@
+import numpy as np
+import random
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import ttk
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-# Geçiş ihtimalleri sözlüğü
-transition_probabilities = {
-    'Düşüş_Düşüş': 0.26666666666666666,
-    'Düşüş_Yükseliş': 0.4,
-    'Düşüş_Yatay': 0.3333333333333333,
-    'Yatay_Düşüş': 0.38461538461538464,
-    'Yatay_Yükseliş': 0.38461538461538464,
-    'Yatay_Yatay': 0.23076923076923078,
-    'Yükseliş_Düşüş': 0.29411764705882354,
-    'Yükseliş_Yükseliş': 0.35294117647058826,
-    'Yükseliş_Yatay': 0.35294117647058826
-}
+# Parametreler
+total_declines = 12
+total_increases = 15
+total_flats = 13
+average_decline = -26.37 / 100  # Yüzdeyi oran olarak çevirmek
+average_increase = 88.79 / 100  # Yüzdeyi oran olarak çevirmek
+average_flat_change = -0.91 / 100  # Yüzdeyi oran olarak çevirmek
 
-
-# Kullanıcı seçimi için geçiş listesi
-transitions = []
-
-
-# Uygulamayı oluşturma
-def add_transition(transition):
-    if len(transitions) < 3:
-        transitions.append(transition)
-        update_transition_label()
-    else:
-        messagebox.showwarning("Uyarı", "Sadece üç geçiş seçebilirsiniz.")
+# Olasılıkları hesapla
+total_events = total_declines + total_increases + total_flats
+prob_decline = total_declines / total_events
+prob_increase = total_increases / total_events
+prob_flat = total_flats / total_events
 
 
-def remove_transition():
-    if transitions:
-        transitions.pop()
-        update_transition_label()
-    else:
-        messagebox.showwarning("Uyarı", "Geçiş listesi zaten boş.")
+# Simülasyon işlevi
+def run_simulation():
+    num_simulation_events = int(num_events_entry.get())
+    initial_value = 100
+    cash = initial_value
+    invested = 0
+    values = [initial_value]
+    events = []
+
+    for _ in range(num_simulation_events):
+        # Yatırım yüzdeleri
+        total_prob = prob_decline + prob_increase + prob_flat
+        cash_weight = 1 - (prob_increase / total_prob)
+        invested_weight = prob_increase / total_prob
+
+        # Toplam değer üzerinden nakit ve yatırım hesaplamaları
+        total_value = cash + invested
+        cash = total_value * cash_weight
+        invested = total_value * invested_weight
+
+        event = random.choices(['decline', 'increase', 'flat'], weights=[prob_decline, prob_increase, prob_flat], k=1)[
+            0]
+
+        if event == 'decline':
+            invested *= (1 + average_decline)
+        elif event == 'increase':
+            invested *= (1 + average_increase)
+        elif event == 'flat':
+            invested *= (1 + average_flat_change)
+
+        total_value = cash + invested
+        values.append(total_value)
+        events.append(event)
+
+    result_label.config(text=f"Başlangıç Değeri: {initial_value}\nSimülasyon Sonrası Değer: {total_value:.2f}")
+
+    # Grafiği güncelle
+    ax.clear()
+    ax.plot(values, marker='o')
+    for i, event in enumerate(events):
+        ax.annotate(event, (i + 1, values[i + 1]), textcoords="offset points", xytext=(0, 10), ha='center')
+    ax.set_title('Simülasyon Sonuçları')
+    ax.set_xlabel('Olay Sayısı')
+    ax.set_ylabel('Değer')
+    canvas.draw()
 
 
-def update_transition_label():
-    transition_label.config(text="Geçişler: " + "_".join(transitions))
-
-
-def calculate_probabilities():
-
-
-    last_transition = transitions[-1]
-    next_probabilities = {k: v for k, v in transition_probabilities.items() if k.startswith(last_transition)}
-
-    if not next_probabilities:
-        messagebox.showerror("Hata", "Geçersiz geçiş dizisi.")
-        return
-
-    result_text = f"Geçişler: {'_'.join(transitions)}\n\nSon geçişten sonra olasılıklar:\n"
-    for k, v in next_probabilities.items():
-        result_text += f"{k}: % {v * 100:.2f}\n"
-
-    messagebox.showinfo("Sonuç", result_text)
-
-
-# Tkinter penceresini oluşturma
+# UI oluşturma
 root = tk.Tk()
-root.title("Geçiş İhtimalleri Hesaplama")
+root.title("Simülasyon")
+root.geometry("1024x768")
 
-# Geçiş butonları
-buttons_frame = tk.Frame(root)
-buttons_frame.pack(pady=10)
+mainframe = ttk.Frame(root, padding="10 10 10 10")
+mainframe.grid(column=0, row=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
-transitions_list = ['Düşüş', 'Yatay', 'Yükseliş']
-for transition in transitions_list:
-    button = tk.Button(buttons_frame, text=transition, command=lambda t=transition: add_transition(t))
-    button.pack(side=tk.LEFT, padx=5)
 
-# Geçişleri gösteren etiket
-transition_label = tk.Label(root, text="Geçişler: ")
-transition_label.pack(pady=10)
 
-# Ekle ve çıkar butonları
-actions_frame = tk.Frame(root)
-actions_frame.pack(pady=10)
+ttk.Label(mainframe, text="Olay Sayısı:").grid(column=1, row=1, sticky=tk.W)
+num_events_entry = ttk.Entry(mainframe, width=7)
+num_events_entry.grid(column=2, row=1, sticky=(tk.W, tk.E))
+num_events_entry.insert(0, "40")
 
-remove_button = tk.Button(actions_frame, text="Son Geçişi Çıkar", command=remove_transition)
-remove_button.pack(side=tk.LEFT, padx=5)
+ttk.Button(mainframe, text="Simülasyonu Çalıştır", command=run_simulation).grid(column=3, row=1, sticky=tk.W)
 
-# Hesapla butonu
-calculate_button = tk.Button(root, text="Hesapla", command=calculate_probabilities)
-calculate_button.pack(pady=20)
+result_label = ttk.Label(mainframe, text="")
+result_label.grid(column=1, row=2, columnspan=3, sticky=tk.W)
 
-# Uygulamayı başlatma
+fig, ax = plt.subplots(figsize=(10, 6))
+canvas = FigureCanvasTkAgg(fig, master=mainframe)
+canvas.get_tk_widget().grid(column=1, row=3, columnspan=3)
+
+for child in mainframe.winfo_children():
+    child.grid_configure(padx=5, pady=5)
+
+num_events_entry.focus()
+
 root.mainloop()
